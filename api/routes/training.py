@@ -1,110 +1,134 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 from typing import Literal
-import httpx
-import os
-import logging
+from datetime import datetime
 
-from app import get_db
-from app import User, Video, Quiz, QuizAttempt, LearningPath, LearningPathItem, UserEvent
+from app import get_db, User, Video, Quiz, QuizAttempt, LearningPath, LearningPathItem, UserEvent
 
 logger = logging.getLogger("training.routes")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID")
-BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}" if TELEGRAM_TOKEN else None
-
-
-async def send_telegram(chat_id: str, text: str):
-    if not BASE_URL:
-        return
-    async with httpx.AsyncClient(timeout=15) as client:
-        await client.post(f"{BASE_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
-
-
 router = APIRouter()
 
 
-class NotifyBody(BaseModel):
+class NotifyRequest(BaseModel):
     user_id: int
+    message: str
     event_type: str = "training"
-    message: str
 
 
-class NotifyWebhookPathRequest(BaseModel):
-    message: str
+@router.get("/health")
+def training_health():
+    return {"module": "training", "status": "ok"}
 
 
-# Telegram commands
-@router.post("/telegram/webhook")
-async def telegram_webhook(request: Request):
-    try:
-        data = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="invalid json")
-
-    message = (data.get("message") or {})
-    text = message.get("text", "") or ""
-    chat_id = str(message.get("chat", {}).get("id", ""))
-    command = text.split()[0].lower() if text else ""
-
-    if command == "/team_progress" and TELEGRAM_ADMIN_CHAT_ID and chat_id == TELEGRAM_ADMIN_CHAT_ID:
-        await send_telegram(chat_id, "Team progress: use FastAPI /training/team for now.")
-    elif command == "/my_training":
-        await send_telegram(chat_id, "Fetching your assigned learning path...")
-    elif command == "/next_lesson":
-        await send_telegram(chat_id, "Loading next lesson.")
-    elif command == "/quiz":
-        await send_telegram(chat_id, "Here is your active quiz.")
-    elif command == "/ask":
-        query = text[len("/ask"):].strip()
-        msg = f"Answer to: {query}" if query else "Usage: /ask What is VLAN trunking?"
-        await send_telegram(chat_id, msg)
-    else:
-        await send_telegram(chat_id, "Commands: /my_training /next_lesson /quiz /ask <question>")
-
-    return {"ok": True}
+@router.get("/users")
+def list_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return [{"id": u.id, "name": u.name, "role": u.role} for u in users]
 
 
-# Training endpoints
-@router.get("/team")
-def team_overview(manager_id: int = Query(...), db: Session = Depends(get_db)):
-    users = db.query(User).filter(User.manager_id == manager_id).all()
-    result = []
-    for user in users:
-        attempts = (
-            db.query(QuizAttempt)
-            .filter(QuizAttempt.user_id == user.id)
-            .order_by(desc(QuizAttempt.completed_at))
-            .limit(5)
-            .all()
-        )
-        result.append(
-            {
-                "user_id": user.id,
-                "name": user.name,
-                "current_level": user.current_level,
-                "recent_scores": [a.score for a in attempts],
-                "latest_score": attempts[0].score if attempts else None,
-            }
-        )
-    return result
+@router.post("/users")
+def create_user(name: str, telegram_id: str | None = None, role: str | None = None, manager_id: int | None = None, db: Session = Depends(get_db)):
+    user = User(name=name, telegram_id=telegram_id, role=role, manager_id=manager_id)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"id": user.id, "name": user.name}
 
 
-@router.post("/enroll")
-def enroll_user(user_id: int, path_title: str, description: str | None = None, db: Session = Depends(get_db)):
-    path = LearningPath(user_id=user_id, title=path_title, description=description, status="active")
+@router.get("/users/manager/{manager_id}")
+def users_by_manager(manager_id: int, db: Session = Depends(get_db)):
+    rows = db.query(User).filter(User.manager_id == manager_id).all()
+    return [{"id": r.id, "name": r.name, "role": r.role} for r in rows]
+
+
+@router.get("/videos")
+def list_videos(db: Session = Depends(get_db)):
+    videos = db.query(Video).order_by(Video.id.desc()).all()
+    return [
+        {
+            "id": v.id,
+            "title": v.title,
+            "file_path": v.file_path,
+            "duration": v.duration,
+            "uploaded_by": v.uploaded_by,
+            "created_at": v.created_at,
+        }
+        for v in videos
+    ]
+
+
+@router.get("/videos/{video_id}")
+def get_video(video_id: int, db: Session = Depends(get_db)):
+    v = db.query(Video).filter(Video.id == video_id).first()
+    if not v:
+        raise HTTPException(status_code=404, detail="video not found")
+    return {
+        "id": v.id,
+        "title": v.title,
+        "file_path": v.file_path,
+        "summary": v.summary,
+        "raw_transcript": v.raw_transcript,
+        "duration": v.duration,
+    }
+
+
+@router.post("/videos/upload")
+async def upload_video(title: str, uploaded_by: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if not file.filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm")):
+        raise HTTPException(status_code=400, detail="unsupported video format")
+
+    path = f"/uploads/{file.filename}"
+    with open(path, "wb") as f:
+        f.write(await file.read())
+
+    video = Video(title=title, file_path=path, uploaded_by=uploaded_by)
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+    return {"video_id": video.id, "title": video.title, "file_path": video.file_path}
+
+
+@router.get("/quizzes")
+def list_quizzes(db: Session = Depends(get_db)):
+    quizzes = db.query(Quiz).order_by(Quiz.id.desc()).all()
+    return [{"id": q.id, "title": q.title, "video_id": q.video_id} for q in quizzes]
+
+
+@router.get("/quizzes/{quiz_id}")
+def get_quiz(quiz_id: int, db: Session = Depends(get_db)):
+    q = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="quiz not found")
+    return {"id": q.id, "title": q.title, "questions_json": q.questions_json}
+
+
+@router.get("/quizzes/{quiz_id}/questions")
+def list_questions(quiz_id: int, db: Session = Depends(get_db)):
+    questions = db.query(Question).filter(Question.quiz_id == quiz_id).all()
+    return [{"id": q.id, "text": q.text, "options_json": q.options_json, "correct_index": q.correct_index} for q in questions]
+
+
+@router.post("/learning-paths")
+def create_learning_path(user_id: int, title: str, description: str | None = None, db: Session = Depends(get_db)):
+    path = LearningPath(user_id=user_id, title=title, description=description, status="active")
     db.add(path)
     db.commit()
     db.refresh(path)
-    return path
+    return {"path_id": path.id, "status": path.status}
+
+
+@router.get("/learning-paths/user/{user_id}")
+def paths_for_user(user_id: int, db: Session = Depends(get_db)):
+    paths = db.query(LearningPath).filter(LearningPath.user_id == user_id).all()
+    return [{"id": p.id, "title": p.title, "status": p.status} for p in paths]
 
 
 @router.post("/learning-paths/{path_id}/items")
 def add_path_item(
     path_id: int,
-    item_type: Literal["video", "quiz", "lesson"],
+    item_type: Literal["video", "quiz", "lesson", "assignment"],
     item_id: int,
     order: int = 0,
     db: Session = Depends(get_db),
@@ -113,14 +137,55 @@ def add_path_item(
     db.add(item)
     db.commit()
     db.refresh(item)
-    return item
+    return {"item_id": item.id, "order": item.item_order}
 
 
 @router.get("/learning-paths/{path_id}/progress")
 def path_progress(path_id: int, db: Session = Depends(get_db)):
     items = db.query(LearningPathItem).filter(LearningPathItem.path_id == path_id).order_by(LearningPathItem.item_order).all()
     completed = sum(1 for i in items if i.completed)
-    return {"total": len(items), "completed": completed}
+    return {"total": len(items), "completed": completed, "progress": (completed / len(items) if items else 0)}
+
+
+@router.get("/users/{user_id}/progress")
+def user_progress(user_id: int, db: Session = Depends(get_db)):
+    attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == user_id).order_by(QuizAttempt.completed_at.desc()).all()
+    average = sum(a.score for a in attempts) / len(attempts) if attempts else 0
+    return {"user_id": user_id, "quiz_attempts": len(attempts), "average_score": round(average, 2)}
+
+
+@router.post("/attempts")
+def record_attempt(user_id: int, quiz_id: int, score: float, db: Session = Depends(get_db)):
+    attempt = QuizAttempt(user_id=user_id, quiz_id=quiz_id, score=score)
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+    return {"attempt_id": attempt.id, "score": attempt.score}
+
+
+@router.get("/team/overview")
+def team_overview(manager_id: int = Query(...), db: Session = Depends(get_db)):
+    users = db.query(User).filter(User.manager_id == manager_id).all()
+    out = []
+    for u in users:
+        attempts = db.query(QuizAttempt).filter(QuizAttempt.user_id == u.id).order_by(QuizAttempt.completed_at.desc()).limit(10).all()
+        out.append(
+            {
+                "user_id": u.id,
+                "name": u.name,
+                "role": u.role,
+                "quiz_count": len(attempts),
+                "average_score": round(sum(a.score for a in attempts) / len(attempts), 2) if attempts else 0,
+                "last_attempt": attempts[0].completed_at if attempts else None,
+            }
+        )
+    return out
+
+
+@router.get("/events/user/{user_id}")
+def user_events(user_id: int, db: Session = Depends(get_db)):
+    events = db.query(UserEvent).filter(UserEvent.user_id == user_id).order_by(UserEvent.created_at.desc()).limit(50).all()
+    return [{"id": e.id, "event_type": e.event_type, "metadata_json": e.metadata_json, "created_at": e.created_at} for e in events]
 
 
 @router.post("/events")
@@ -129,10 +194,4 @@ def record_event(user_id: int, event_type: str, metadata: dict | None = None, db
     db.add(event)
     db.commit()
     db.refresh(event)
-    return event
-
-
-@router.post("/notify")
-async def notify_user(body: NotifyBody):
-    await send_telegram(str(body.user_id), f"[{body.event_type}] {body.message}")
-    return {"ok": True}
+    return {"event_id": event.id, "event_type": event.event_type}

@@ -11,7 +11,7 @@ Self-hosted platform to upload training videos, generate quizzes, build personal
 ```bash
 git clone https://github.com/OneByJorah/it-training-system.git
 cd it-training-system
-cp .env.example .env
+cp compose.env.example .env
 docker compose up -d
 bash scripts/bootstrap.sh
 ```
@@ -29,3 +29,4 @@ bash scripts/bootstrap.sh
 - `docs/ARCHITECTURE.md`
 - `docs/DATA_MODEL.md`
 - `docs/BUILD_PLAN.md`
+

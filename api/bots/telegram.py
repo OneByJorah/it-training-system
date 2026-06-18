@@ -1,15 +1,12 @@
-import logging
-import os
-import httpx
 from fastapi import APIRouter, Request
+import httpx
+import os
 
-logger = logging.getLogger("training.telegram")
 router = APIRouter()
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID")
+TELEGRAM_TOKEN=os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_ADMIN_CHAT_ID=os.environ.get("TELEGRAM_ADMIN_CHAT_ID")
 BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}" if TELEGRAM_TOKEN else None
-
 
 
 async def send_message(chat_id: str, text: str):
@@ -19,45 +16,65 @@ async def send_message(chat_id: str, text: str):
         await client.post(f"{BASE_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
 
+def _is_chat_admin(chat_id: str) -> bool:
+    return bool(TELEGRAM_ADMIN_CHAT_ID and str(chat_id) == str(TELEGRAM_ADMIN_CHAT_ID))
+
+
 @router.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
-    data = await request.json()
-    message = data.get("message") or {}
-    text = message.get("text", "")
+    try:
+        data = await request.json()
+    except Exception:
+        return {"ok": True}
+
+    message = (data.get("message") or {})
+    text = (message.get("text") or "")
     chat_id = str(message.get("chat", {}).get("id", ""))
-    user_id = message.get("from", {}).get("id")
+    command = text.split()[0].lower() if text else ""
 
-    command = text.split()[0].lower()
+    if command == "/start":
+        await send_message(chat_id, "Training Bot ready. /help")
+        return {"ok": True}
 
-    # -------- Manager commands --------
-    if command == "/team_progress" and TELEGRAM_ADMIN_CHAT_ID and chat_id == TELEGRAM_ADMIN_CHAT_ID:
-        await send_message(chat_id, "Team progress view not wired yet. Use FastAPI /training/team for now.")
+    if command == "/help":
+        await send_message(chat_id, "Commands: /my_training, /next_lesson, /quiz, /ask <question>, /team_progress (admin only)")
+        return {"ok": True}
 
-    # -------- Employee commands --------
-    elif command == "/my_training":
-        await send_message(chat_id, "Fetching your assigned learning path...")
+    if command == "/team_progress":
+        if not _is_chat_admin(chat_id):
+            await send_message(chat_id, "Forbidden: admin only.")
+            return {"ok": True}
+        await send_message(chat_id, "Use FastAPI /training/team?manager_id=<id>")
+        return {"ok": True}
 
-    elif command == "/next_lesson":
-        await send_message(chat_id, "Loading next lesson.")
+    if command == "/my_training":
+        await send_message(chat_id, "MyTraining view: call FastAPI /training/learning-paths/user/{user_id}")
+        return {"ok": True}
 
-    elif command == "/quiz":
-        await send_message(chat_id, "Here is your active quiz.")
+    if command == "/next_lesson":
+        await send_message(chat_id, "Fetching next lesson...")
+        return {"ok": True}
 
-    # -------- Ask Hermes --------
-    elif command == "/ask":
+    if command == "/quiz":
+        await send_message(chat_id, "Latest quizzes: /training/quizzes")
+        return {"ok": True}
+
+    if command == "/ask":
         query = text[len("/ask"):].strip()
         if not query:
-            await send_message(chat_id, "Usage: /ask What is VLAN trunking?")
+            await send_message(chat_id, "Missing query. Example: /ask What is DNS hijacking?")
         else:
-            await send_message(chat_id, f"Answer to: {query}")
+            await send_message(chat_id, f"LLM bridge not connected yet for: {query}")
+        return {"ok": True}
 
-    else:
-        await send_message(chat_id, "Commands: /my_training /next_lesson /quiz /ask <question>")
-
+    await send_message(chat_id, "Unknown command. /help")
     return {"ok": True}
 
 
 @router.post("/training/notify/user/{user_id}")
-async def notify_user(user_id: int, event_type: str, message: str):
+async def notify_user(user_id: int, request: Request):
+    body = await request.json()
+    message = body.get("message", "")
+    event_type = body.get("event_type", "training")
     await send_message(str(user_id), f"[{event_type}] {message}")
     return {"ok": True}

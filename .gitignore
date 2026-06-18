@@ -3,4 +3,9 @@
 .github
 .mypy_cache
 __pycache__
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
 

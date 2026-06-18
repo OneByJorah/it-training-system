@@ -1,0 +1,19 @@
+name: ci
+run-name: "${{ github.workflow }} by @${{ github.actor }}"
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  compose_lint_and_smoke_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Lint Docker Compose file
+        run: |
+          docker compose --profile all config > /dev/null
