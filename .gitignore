@@ -1,0 +1,6 @@
+.env
+.git
+.github
+.mypy_cache
+__pycache__
+
