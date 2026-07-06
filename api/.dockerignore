@@ -1,0 +1,12 @@
+.git
+.gitignore
+.github
+.mypy_cache
+__pycache__
+*.md
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+reports/
