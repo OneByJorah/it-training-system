@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="IT Training System", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="LearnForge", version="0.2.0", lifespan=lifespan)
 
 # Security headers middleware
 @app.middleware("http")
@@ -47,7 +47,7 @@ def health():
 
 @app.get("/")
 def root():
-    return {"service": "it-training-system-api", "docs": "/docs"}
+    return {"service": "LearnForge-api", "docs": "/docs"}
 
 from routes import training
 

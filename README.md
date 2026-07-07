@@ -8,7 +8,7 @@
 <br>
 
 <div align="center">
-  <h1>🎓 IT Training System</h1>
+  <h1>🎓 LearnForge</h1>
   <p><strong>Self-Hosted IT Training Management Platform</strong></p>
   <p>Structured learning paths, automated quizzes, progress tracking, and video ingestion</p>
   <p>
@@ -38,8 +38,8 @@ This is a CLI/backend-only tool. No screenshots available.
 ## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/OneByJorah/it-training-system.git
-cd it-training-system
+git clone https://github.com/OneByJorah/LearnForge.git
+cd LearnForge
 cp compose.env.example .env
 # Edit .env with your configuration
 docker-compose up -d
@@ -50,7 +50,7 @@ API available at **http://localhost:8080**.
 ## 🏗️ Architecture
 
 ```
-it-training-system/
+LearnForge/
 ├── api/                       # FastAPI backend
 ├── db/                        # SQLite schema definition
 ├── ops/                       # Operations & deployment

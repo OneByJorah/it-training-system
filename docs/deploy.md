@@ -1,4 +1,4 @@
-# IT Training System — Production Setup
+# LearnForge — Production Setup
 
 ## 1. Prereqs on Ubuntu
 
@@ -12,8 +12,8 @@ sudo snap install docker
 ## 2. Clone repo
 
 ```bash
-git clone https://github.com/OneByJorah/it-training-system.git
-cd it-training-system
+git clone https://github.com/OneByJorah/LearnForge.git
+cd LearnForge
 cp compose.env.example .env
 ```
 
