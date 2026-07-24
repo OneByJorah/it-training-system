@@ -8,3 +8,6 @@ __pycache__
 *.mkv
 *.webm
 reports/
+
+# OneByJorah portfolio tooling
+.venv-screenshot/

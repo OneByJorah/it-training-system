@@ -1,23 +1,22 @@
 <div align="center">
-  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white">
-  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white">
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white">
-  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white">
+
+![LearnForge banner](docs/assets/banner.svg)
+
+# LearnForge
+
+Self-hosted IT training platform
+
+![License](https://img.shields.io/badge/license-MIT-brightgreen)
+![Language](https://img.shields.io/badge/language-Python-blue)
 </div>
+
+---
+
+<p align="center">
+  <img src="docs/assets/screenshot.png" alt="LearnForge preview" width="90%">
+</p>
 
 <br>
-
-<div align="center">
-  <h1>🎓 LearnForge</h1>
-  <p><strong>Self-Hosted IT Training Management Platform</strong></p>
-  <p>Structured learning paths, automated quizzes, progress tracking, and video ingestion</p>
-  <p>
-    <a href="#-features">Features</a> •
-    <a href="#-quick-start">Quick Start</a> •
-    <a href="#-architecture">Architecture</a> •
-    <a href="#-tech-stack">Tech Stack</a>
-  </p>
-</div>
 
 ---
 
@@ -41,7 +40,6 @@ This is a CLI/backend-only tool. No screenshots available.
 git clone https://github.com/OneByJorah/LearnForge.git
 cd LearnForge
 cp compose.env.example .env
-# Edit .env with your configuration
 docker-compose up -d
 ```
 
@@ -81,7 +79,18 @@ MIT © Jhonattan L. Jimenez
 
 ---
 
-<div align="center">
-  <p>📚 Train your team, self-hosted</p>
-  <p><a href="https://github.com/OneByJorah">@OneByJorah</a></p>
-</div>
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## 🔒 Security
+
+Found a vulnerability? Please follow our [Security Policy](SECURITY.md) and report privately to `security@jorahone.com`.
+
+## 📄 License
+
+[MIT License](LICENSE) © Jhonattan L. Jimenez (OneByJorah)
+
+---
+
+<p align="center">Built with 🌴 by <a href="https://github.com/OneByJorah">OneByJorah</a> · <a href="https://jorahone.com">jorahone.com</a></p>
